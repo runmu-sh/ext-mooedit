@@ -1,0 +1,96 @@
+{
+  "name": "@runmu.sh/ext-mooedit",
+  "version": "1.0.0",
+  "description": "Edit MOO verbs, properties and notes in a real code editor: MOO syntax colours, a linter, snippets, a diff before you save. Handles MCP simpleedit and LambdaCore local edit.",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "screenshots"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node scripts/build.mjs --check",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@muclient/sdk": "npm:@runmu.sh/sdk@^1.13.0",
+    "@runmu.sh/dev": "^0.2.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0",
+    "vue": "^3.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "muclient": {
+    "id": "mooedit",
+    "api": "^1.13",
+    "source": "src/index.ts",
+    "displayName": "MOO editor",
+    "description": "Edit MOO verbs, properties and notes in a real code editor: MOO syntax colours, a linter, snippets, a diff before you save. Handles MCP simpleedit and LambdaCore local edit.",
+    "contributes": {
+      "mcp": [
+        {
+          "package": "dns-org-mud-moo-simpleedit",
+          "min": "1.0",
+          "max": "1.0",
+          "messages": {
+            "dns-org-mud-moo-simpleedit-content": {
+              "dir": "in"
+            },
+            "dns-org-mud-moo-simpleedit-set": {
+              "dir": "out"
+            }
+          }
+        }
+      ]
+    },
+    "capabilities": [
+      "send-commands"
+    ],
+    "modules": {
+      "dist/editor.js": "aee4ed07b19b39ffa348a773e3834a3308ab617247709750a2fe2def7b8758c7"
+    },
+    "categories": [
+      "developer"
+    ],
+    "tags": [
+      "moo",
+      "mcp",
+      "editor"
+    ],
+    "publisher": "bitmuse"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.5"
+  },
+  "keywords": [
+    "moo",
+    "lambdamoo",
+    "mcp",
+    "editor",
+    "codemirror",
+    "simpleedit"
+  ],
+  "homepage": "https://runmu.sh/marketplace/x/mooedit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/runmu-sh/ext-mooedit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/runmu-sh/ext-mooedit/issues"
+  }
+}
