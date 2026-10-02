@@ -64,7 +64,7 @@ const CSS = `
 .mooed .runs code { font-family: var(--font-mono); font-size: .72rem; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mooed .stat { font-size: .72rem; color: var(--fg-dim); }
 .mooed .err { font-size: .72rem; color: var(--alert); min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 520px) { .mooed { height: min(70vh, 36rem); } .mooed .sess { flex-basis: 100%; } .mooed .runs, .mooed .err { flex-basis: 100%; } }
+@media (max-width: 520px) { .mooed { height: min(70vh, 36rem); } .mooed .sess { flex-basis: 100%; } .mooed .runs, .mooed .err { flex-basis: 100%; } .mooed .bar { gap: .1rem .3rem; } }
 `;
 
 let styled = 0;

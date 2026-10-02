@@ -1,6 +1,6 @@
 {
   "name": "@runmu.sh/ext-mooedit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Edit MOO verbs, properties and notes in a real code editor: MOO syntax colours, a linter, snippets, a diff before you save. Handles MCP simpleedit and LambdaCore local edit.",
   "type": "module",
   "exports": "./dist/index.js",
@@ -55,7 +55,7 @@
       "send-commands"
     ],
     "modules": {
-      "dist/editor.js": "aee4ed07b19b39ffa348a773e3834a3308ab617247709750a2fe2def7b8758c7"
+      "dist/editor.js": "267f0bb2f2facfc6d8862721822e4f20a0c5cc5ea7f37096bdfc4baebe0da6a0"
     },
     "categories": [
       "developer"

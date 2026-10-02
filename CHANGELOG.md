@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Narrow screens: the command Save runs gets its own line, so Cancel and Save stay together. The toolbar is
+  tighter.
+
 ## 1.0.0
 
 - The MOO editor, moved out of μClient (SDK 1.13). It has code and prose modes, MOO highlighting and a linter,
