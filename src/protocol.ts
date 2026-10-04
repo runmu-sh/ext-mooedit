@@ -45,30 +45,6 @@ export function uploadText(upload: string, text: string): string {
 
 // ─── the editor's helpers ─────────────────────────────────────────────────────
 
-/** One line of a diff: unchanged, added or removed, with its line numbers before (`a`) and after (`b`). */
-export interface DiffLine { op: ' ' | '+' | '-'; text: string; a?: number; b?: number }
-
-/** Line diff (LCS) for the review before Save. Large inputs fall back to "all removed, all added". */
-export function lineDiff(before: string, after: string): DiffLine[] {
-  const A = before.split('\n'), B = after.split('\n');
-  const n = A.length, m = B.length;
-  if (n * m > 4_000_000) return [...A.map((text, i) => ({ op: '-' as const, text, a: i + 1 })), ...B.map((text, j) => ({ op: '+' as const, text, b: j + 1 }))];
-  const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
-  const out: DiffLine[] = [];
-  let i = 0, j = 0;
-  while (i < n && j < m) {
-    if (A[i] === B[j]) { out.push({ op: ' ', text: A[i], a: i + 1, b: j + 1 }); i++; j++; }
-    else if (L[i + 1][j] >= L[i][j + 1]) { out.push({ op: '-', text: A[i], a: i + 1 }); i++; }
-    else { out.push({ op: '+', text: B[j], b: j + 1 }); j++; }
-  }
-  while (i < n) { out.push({ op: '-', text: A[i], a: i + 1 }); i++; }
-  while (j < m) { out.push({ op: '+', text: B[j], b: j + 1 }); j++; }
-  return out;
-}
-
-export const diffStats = (d: DiffLine[]) => ({ added: d.filter((x) => x.op === '+').length, removed: d.filter((x) => x.op === '-').length });
-
 /** One run of a previewed line: its text and the terminal's palette classes (`c-001`, `bg-004`, `b`, `i`, `u`). */
 export interface Run { text: string; cls: string }
 
@@ -111,21 +87,3 @@ export function ansiRuns(line: string): Run[] {
   push(line.slice(at).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ''));
   return out;
 }
-
-/** Snippets for the toolbar, by mode. */
-export const SNIPPETS: Record<'code' | 'prose', Array<{ label: string; text: string }>> = {
-  code: [
-    { label: 'if', text: 'if (cond)\n  \nendif\n' },
-    { label: 'for', text: 'for x in (list)\n  \nendfor\n' },
-    { label: 'while', text: 'while (cond)\n  \nendwhile\n' },
-    { label: 'try', text: 'try\n  \nexcept e (ANY)\n  player:tell(toliteral(e));\nendtry\n' },
-    { label: 'tell', text: 'player:tell("");\n' },
-    { label: 'fork', text: 'fork (0)\n  \nendfork\n' },
-  ],
-  prose: [
-    { label: 'para', text: '\n\n' },
-    { label: 'rule', text: '\n— — —\n' },
-    { label: 'quote', text: '“”' },
-    { label: 'ellipsis', text: '…' },
-  ],
-};

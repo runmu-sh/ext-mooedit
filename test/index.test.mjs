@@ -105,9 +105,6 @@ test('protocol helpers', () => {
   assert.deepEqual(P.simpleeditContent('moo-code', 'a\r\nb'), ['a', 'b']);
   assert.equal(P.hash('abc'), P.hash('abc'));
   assert.notEqual(P.hash('abc'), P.hash('abd'));
-  const d = P.lineDiff('a\nb\nc', 'a\nc\nd');
-  assert.deepEqual(d.map((l) => l.op + l.text), [' a', '-b', ' c', '+d']);
-  assert.deepEqual(P.diffStats(d), { added: 1, removed: 1 });
   assert.deepEqual(P.ansiRuns('\x1b[1;31mred\x1b[0m plain \x1b[38;5;208mo'), [{ text: 'red', cls: 'c-009 b' }, { text: ' plain ', cls: '' }, { text: 'o', cls: 'c-208' }]);
 });
 

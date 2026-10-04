@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+- **Program** sends straight away: the Review step, the Diff view and its confirm are gone. The button reads
+  Program for MOO code and Save for text; Ctrl+S does the same.
+- The snippet buttons (`if`, `for`, `while`, …) are gone from the toolbar.
+
 ## 1.0.1
 
 - Narrow screens: the command Save runs gets its own line, so Cancel and Save stay together. The toolbar is

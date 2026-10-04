@@ -2,9 +2,9 @@
  * The MOO editor's UI, the lazy module `dist/editor.js` (`muclient.modules`, loaded with `mu.modules.load` the first
  * time an editor opens, so CodeMirror stays out of the entry). Plain DOM inside the host modal (`mu.ui.modal`):
  *
- *   toolbar   session · [ PROSE | CODE ] · [ EDIT | PREVIEW | DIFF ] · snippets
- *   pane      CodeMirror (MOO language + linter in code mode; wrapping prose mode), the ANSI preview, or the diff
- *   footer    "Saving runs: <command>" (local edit) · error · diff stats · CANCEL · REVIEW → SAVE TO GAME
+ *   toolbar   session · [ PROSE | CODE ] · [ EDIT | PREVIEW ]
+ *   pane      CodeMirror (MOO language + linter in code mode; wrapping prose mode) or the ANSI preview
+ *   footer    "Saving runs: <command>" (local edit) · error · CANCEL · PROGRAM (code) / SAVE
  *
  * The host owns the editor's state (`EditorSession`): the draft goes to `setDraft` (it follows the player to their
  * other devices), new server text shows as "The game sent new text" with Take it, and Save is `session.save`, which
@@ -20,10 +20,10 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { moocode } from './moocode';
 import { tokenTheme } from './theme';
-import { ansiRuns, diffStats, lineDiff, SNIPPETS } from './protocol';
+import { ansiRuns } from './protocol';
 
 export type Mode = 'code' | 'prose';
-type View = 'edit' | 'preview' | 'diff';
+type View = 'edit' | 'preview';
 export interface EditorOpts { lint: boolean; mode: Mode | 'auto' }
 export interface Mounted {
   dispose(): void;
@@ -39,22 +39,13 @@ const CSS = `
 .mooed { display: flex; flex-direction: column; height: min(62vh, 36rem); margin: -.4rem -1rem -.8rem; background: var(--bg); }
 .mooed .bar { display: flex; align-items: center; gap: .8ch; flex-wrap: wrap; padding: 4px .85rem; background: var(--bg-elev); border-bottom: 1px solid var(--border); }
 .mooed .sess { font-size: .66rem; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); margin-right: .6ch; }
-.mooed .lbl { font-size: .66rem; letter-spacing: .16em; text-transform: uppercase; color: var(--fg-faint); }
 .mooed .seg { display: inline-flex; gap: 2px; }
 .mooed .sp { flex: 1; }
 .mooed .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .mooed .cm { flex: 1; min-height: 0; overflow: hidden; }
 .mooed .cm .cm-editor { height: 100%; }
-.mooed .preview, .mooed .diff { flex: 1; overflow: auto; padding: .6rem .85rem; font-family: var(--font-mono); font-size: .82rem; white-space: pre-wrap; }
+.mooed .preview { flex: 1; overflow: auto; padding: .6rem .85rem; font-family: var(--font-mono); font-size: .82rem; white-space: pre-wrap; }
 .mooed .pl { min-height: 1.5em; }
-.mooed .diff { padding: 4px 0; white-space: pre; font-size: .78rem; }
-.mooed .dl { display: flex; line-height: 1.5; }
-.mooed .dl .g { width: 3em; flex: none; text-align: right; padding-right: 6px; color: var(--fg-faint); background: var(--bg-elev); border-right: 1px solid var(--border); }
-.mooed .dl .op { width: 1.6em; flex: none; text-align: center; color: var(--fg-faint); }
-.mooed .dl.add { background: color-mix(in srgb, var(--ok) 14%, transparent); }
-.mooed .dl.add .op, .mooed .dl.add .t { color: var(--ok); }
-.mooed .dl.del { background: color-mix(in srgb, var(--alert) 14%, transparent); }
-.mooed .dl.del .op, .mooed .dl.del .t { color: var(--alert); }
 .mooed .empty { margin: 0; color: var(--fg-faint); font-size: .76rem; padding: .3rem .85rem; }
 .mooed .note { margin: 0; padding: 4px .85rem; font-size: .72rem; color: var(--gold); background: var(--bg-elev); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1ch; flex-wrap: wrap; }
 .mooed .note.warn { color: var(--alert); border-color: var(--alert); }
@@ -62,7 +53,6 @@ const CSS = `
 .mooed .foot { display: flex; align-items: center; gap: 8px; padding: 8px .85rem; border-top: 1px solid var(--border); background: var(--bg-elev); flex-wrap: wrap; }
 .mooed .runs { display: inline-flex; align-items: baseline; gap: .8ch; min-width: 0; }
 .mooed .runs code { font-family: var(--font-mono); font-size: .72rem; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mooed .stat { font-size: .72rem; color: var(--fg-dim); }
 .mooed .err { font-size: .72rem; color: var(--alert); min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) { .mooed { height: min(70vh, 36rem); } .mooed .sess { flex-basis: 100%; } .mooed .runs, .mooed .err { flex-basis: 100%; } .mooed .bar { gap: .1rem .3rem; } }
 `;
@@ -115,11 +105,6 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
   });
   const text = () => ed.state.doc.toString();
   const setDoc = (t: string) => { if (t !== text()) ed.dispatch({ changes: { from: 0, to: ed.state.doc.length, insert: t } }); };
-  const insert = (t: string) => {
-    const r = ed.state.selection.main;
-    ed.dispatch({ changes: { from: r.from, to: r.to, insert: t }, selection: { anchor: r.from + t.length } });
-    ed.focus();
-  };
   const changed = () => text() !== s.text;
 
   // ─── the frame ────────────────────────────────────────────────────────────
@@ -128,8 +113,7 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
   const bar = h('div', { class: 'bar' });
   const notes = h('div');
   const preview = h('div', { class: 'preview mu-ansi', 'data-testid': 'mcp-preview-body', hidden: true });
-  const diff = h('div', { class: 'diff', 'data-testid': 'mcp-diff-body', hidden: true });
-  const pane = h('div', { class: 'pane' }, notes, cmHost, preview, diff);
+  const pane = h('div', { class: 'pane' }, notes, cmHost, preview);
   const foot = h('div', { class: 'foot' });
   const root = h('div', { class: 'mooed', tabindex: '-1', 'data-testid': 'mcp-editor', 'data-language': s.language }, bar, pane, foot);
   el.append(root);
@@ -140,9 +124,7 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
   function renderBar() {
     bar.replaceChildren(h('span', { class: 'sess' }, sessName),
       h('span', { class: 'seg', role: 'group', 'aria-label': 'mode' }, btn('Prose', mode === 'prose', () => setMode('prose'), 'mcp-mode-prose'), btn('Code', mode === 'code', () => setMode('code'), 'mcp-mode-code')),
-      h('span', { class: 'seg', role: 'group', 'aria-label': 'view' }, btn('Edit', view === 'edit', () => setView('edit'), 'mcp-edit'), btn('Preview', view === 'preview', () => setView('preview'), 'mcp-preview'), btn('Diff', view === 'diff', () => setView('diff'), 'mcp-diff')),
-      h('span', { class: 'sp' }),
-      ...(view === 'edit' && !s.readOnly ? [h('span', { class: 'lbl' }, 'Snippets'), ...SNIPPETS[mode].map((x) => h('button', { type: 'button', class: c.tool, 'data-testid': 'mcp-snippet', onclick: () => insert(x.text) }, x.label))] : []),
+      h('span', { class: 'seg', role: 'group', 'aria-label': 'view' }, btn('Edit', view === 'edit', () => setView('edit'), 'mcp-edit'), btn('Preview', view === 'preview', () => setView('preview'), 'mcp-preview')),
     );
   }
 
@@ -172,28 +154,20 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
   function renderPane() {
     cmHost.hidden = view !== 'edit';
     preview.hidden = view !== 'preview';
-    diff.hidden = view !== 'diff';
     if (view === 'preview') {
       const t = text();
       preview.replaceChildren(...(t ? t.split('\n').map((l) => h('div', { class: 'pl' }, ...ansiRuns(l).map((r) => h('span', { class: r.cls || null }, r.text)), '\u200b')) : [h('p', { class: 'empty' }, 'Nothing to preview.')]));
     }
-    if (view === 'diff') {
-      diff.replaceChildren(...(!changed() ? [h('p', { class: 'empty' }, 'No changes.')] : lineDiff(s.text, text()).map((l) =>
-        h('div', { class: `dl${l.op === '+' ? ' add' : l.op === '-' ? ' del' : ''}`, 'data-op': l.op }, h('span', { class: 'g' }, String(l.a ?? '')), h('span', { class: 'g' }, String(l.b ?? '')), h('span', { class: 'op' }, l.op), h('span', { class: 't' }, l.text)))));
-    }
   }
 
   function renderFoot() {
-    const st = view === 'diff' && changed() ? diffStats(lineDiff(s.text, text())) : null;
     foot.replaceChildren(...([
       s.command !== null ? h('span', { class: 'runs', 'data-testid': 'mcp-upload' }, h('span', { class: c.label }, 'Saving runs:'), h('code', null, s.command || '(no command)')) : null,
       err ? h('span', { class: 'err', role: 'alert', 'data-testid': 'editor-error' }, err) : null,
-      st ? h('span', { class: 'stat', 'data-testid': 'mcp-stat' }, `+${st.added} −${st.removed}`) : null,
       h('span', { class: 'sp' }),
       h('button', { type: 'button', class: c.btn, 'data-testid': 'mcp-cancel', onclick: () => { if (!requestClose()) return; s.cancel(); } }, 'Cancel'),
-      s.readOnly ? null : view !== 'diff'
-        ? h('button', { type: 'button', class: c.primary, 'data-testid': 'mcp-review', onclick: () => setView('diff') }, 'Review')
-        : h('button', { type: 'button', class: c.primary, 'data-testid': 'mcp-save', disabled: saving || asking, onclick: () => void save() }, saving ? 'Saving…' : 'Save to game'),
+      s.readOnly ? null : h('button', { type: 'button', class: c.primary, 'data-testid': 'mcp-save', disabled: saving || asking, onclick: () => void save() },
+        saving ? 'Saving…' : s.language === 'moo-code' ? 'Program' : 'Save'),
     ].filter((x): x is HTMLElement => !!x)));
   }
 
@@ -232,7 +206,7 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
   root.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault(); e.stopPropagation();
-      if (view === 'diff') void save(); else setView('diff');
+      void save();
     }
   }, true);
 

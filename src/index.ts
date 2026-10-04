@@ -9,7 +9,7 @@
  *    asks first for a verb outside the world's upload verbs), and Save sends the command, the dot-stuffed lines and
  *    `.`, raw (no separators or aliases on MOO code).
  *  - **The editor UI** (`mu.editor.provide`) for MOO code, text and Markdown, whoever opened the editor: CodeMirror
- *    with the MOO language and linter, prose and code modes, snippets, an ANSI preview and a diff before Save. It is
+ *    with the MOO language and linter, prose and code modes and an ANSI preview; Program (Save) sends at once. It is
  *    the lazy module `dist/editor.js` (`mu.modules.load`), fetched the first time an editor opens. If it cannot load,
  *    the extension steps aside and the host's plain editor shows the text.
  */
