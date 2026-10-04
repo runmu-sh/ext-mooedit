@@ -38,7 +38,7 @@ test('registers the editor UI, local edit (gated by the world setting) and its s
   assert.equal(le.args[0]('s1'), false, 'local edit is off by default');
   host.mu.settings.set('localEdit', true);
   assert.equal(le.args[0]('s1'), true);
-  assert.deepEqual(host.settingsSchema.items.map((i) => i.key), ['localEdit', 'lint', 'mode']);
+  assert.deepEqual(host.settingsSchema.items.map((i) => i.key), ['localEdit', 'window', 'lint', 'mode']);
   assert.equal(host.errors.length, 0);
   await host.unload();
   assert.deepEqual(host.live(), []);

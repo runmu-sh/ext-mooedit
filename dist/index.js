@@ -37,6 +37,15 @@ var index_default = defineExtension({
           scope: "world",
           hint: "Opens #$# edit blocks in the editor; Save runs their upload command. Off: they show as text. Off by itself when the game speaks MCP 2.1."
         },
+        {
+          key: "window",
+          label: "Always open the editor in a new window",
+          kind: "toggle",
+          default: false,
+          scope: "global",
+          sync: "device",
+          hint: "Pops the editor out into its own window instead of a dialog. If the browser blocks the pop-up, it opens as a dialog."
+        },
         { key: "lint", label: "Check MOO code as you type", kind: "toggle", default: true },
         {
           key: "mode",
@@ -101,6 +110,108 @@ function provide(mu) {
   });
 }
 function showIn(mu, session, load, giveUp) {
+  if (mu.settings.get("window") === true) {
+    const w = showInWindow(mu, session, load, giveUp);
+    if (w) return w;
+    mu.ui.toast("MOO editor", "The browser blocked the editor window. Allow pop-ups for \u03BCClient to open it in a window; showing it here for now.");
+  }
+  return showInModal(mu, session, load, giveUp);
+}
+var editorOpts = (mu, sid) => ({
+  lint: mu.settings.get("lint", { sid }) !== false,
+  mode: String(mu.settings.get("mode", { sid }) ?? "auto")
+});
+function mirrorStyles(w) {
+  const copies = /* @__PURE__ */ new Map();
+  const sync = () => {
+    if (w.closed) return;
+    const src = document.documentElement, dst = w.document.documentElement;
+    for (const a of [...src.attributes]) if ((a.name.startsWith("data-") || a.name === "style" || a.name === "class") && dst.getAttribute(a.name) !== a.value) dst.setAttribute(a.name, a.value);
+    const now = new Set(document.head.querySelectorAll('style, link[rel="stylesheet"]'));
+    for (const [s, c] of [...copies]) if (!now.has(s)) {
+      c.remove();
+      copies.delete(s);
+    }
+    for (const s of now) {
+      let c = copies.get(s);
+      if (!c) {
+        c = w.document.importNode(s, true);
+        w.document.head.appendChild(c);
+        copies.set(s, c);
+      } else if (s.tagName === "STYLE" && c.textContent !== s.textContent) c.textContent = s.textContent;
+    }
+  };
+  const mo = new MutationObserver(sync);
+  mo.observe(document.head, { childList: true, subtree: true, characterData: true });
+  mo.observe(document.documentElement, { attributes: true });
+  sync();
+  return () => mo.disconnect();
+}
+var windows = 0;
+function showInWindow(mu, session, load, giveUp) {
+  const w = window.open("", `mooedit-${++windows}`, "popup,width=960,height=680");
+  if (!w) return null;
+  let hostClosed = false, gone = false;
+  let ed = null;
+  const d = w.document;
+  d.open();
+  d.write('<!doctype html><html lang="en"><head><meta charset="UTF-8"></head><body></body></html>');
+  d.close();
+  d.title = session.title;
+  d.body.style.margin = "0";
+  d.body.style.background = "var(--bg)";
+  const stopStyles = mirrorStyles(w);
+  const el = d.createElement("div");
+  el.className = "mooed-win";
+  el.textContent = "Loading the editor\u2026";
+  d.body.append(el);
+  const teardown = () => {
+    if (gone) return;
+    gone = true;
+    window.removeEventListener("pagehide", closeWin);
+    stopStyles();
+    ed?.dispose();
+    ed = null;
+    if (!w.closed) w.close();
+  };
+  const closeWin = () => {
+    hostClosed = true;
+    teardown();
+  };
+  window.addEventListener("pagehide", closeWin);
+  w.addEventListener("beforeunload", (e) => {
+    if (!hostClosed && ed && !ed.requestClose()) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+  w.addEventListener("pagehide", () => {
+    const cancel = !hostClosed;
+    teardown();
+    if (cancel) session.cancel();
+  });
+  w.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (!ed || ed.requestClose()) {
+      teardown();
+      session.cancel();
+    }
+  });
+  load().then((m) => {
+    if (gone) return;
+    el.textContent = "";
+    ed = m.mountEditor(el, session, mu, editorOpts(mu, session.sid));
+    w.focus();
+  }, (e) => {
+    mu.log.error("the editor module did not load:", e);
+    mu.ui.toast("MOO editor", `The code editor could not load (${e?.message ?? e}). Showing the plain editor.`, { kind: "error" });
+    hostClosed = true;
+    teardown();
+    giveUp();
+  });
+  return closeWin;
+}
+function showInModal(mu, session, load, giveUp) {
   let hostClosed = false;
   let ed = null;
   const modal = mu.ui.modal({
@@ -113,10 +224,7 @@ function showIn(mu, session, load, giveUp) {
       load().then((m) => {
         if (gone) return;
         el.textContent = "";
-        ed = m.mountEditor(el, session, mu, {
-          lint: mu.settings.get("lint", { sid: session.sid }) !== false,
-          mode: String(mu.settings.get("mode", { sid: session.sid }) ?? "auto")
-        });
+        ed = m.mountEditor(el, session, mu, editorOpts(mu, session.sid));
       }, (e) => {
         mu.log.error("the editor module did not load:", e);
         mu.ui.toast("MOO editor", `The code editor could not load (${e?.message ?? e}). Showing the plain editor.`, { kind: "error" });

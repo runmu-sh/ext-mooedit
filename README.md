@@ -35,6 +35,7 @@ Without this extension μClient opens these editors as a plain text box.
 | Setting | Default | |
 |---|---|---|
 | Accept LambdaCore local editing (#$# edit) | off, per world | See above. |
+| Always open the editor in a new window | off, this device | Pops the editor out into its own window. A blocked pop-up falls back to the dialog. |
 | Check MOO code as you type | on | The linter. |
 | Text opens in | auto | Code for MOO code, prose for text; or always one. |
 

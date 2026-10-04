@@ -28,6 +28,10 @@ export default defineExtension({
           key: 'localEdit', label: 'Accept LambdaCore local editing (#$# edit)', kind: 'toggle', default: false, scope: 'world',
           hint: 'Opens #$# edit blocks in the editor; Save runs their upload command. Off: they show as text. Off by itself when the game speaks MCP 2.1.',
         },
+        {
+          key: 'window', label: 'Always open the editor in a new window', kind: 'toggle', default: false, scope: 'global', sync: 'device',
+          hint: 'Pops the editor out into its own window instead of a dialog. If the browser blocks the pop-up, it opens as a dialog.',
+        },
         { key: 'lint', label: 'Check MOO code as you type', kind: 'toggle', default: true },
         {
           key: 'mode', label: 'Text opens in', kind: 'select', default: 'auto',
@@ -83,8 +87,101 @@ function provide(mu: Mu) {
   });
 }
 
-/** One editor in a host modal. Returns the cleanup the host calls when it closes or moves elsewhere. */
+/** One editor, in its own window (the setting) or a host modal. Returns the cleanup the host calls when it closes or moves elsewhere. */
 function showIn(mu: Mu, session: EditorSession, load: () => Promise<EditorModule>, giveUp: () => void): Dispose {
+  if (mu.settings.get<boolean>('window') === true) {
+    const w = showInWindow(mu, session, load, giveUp);
+    if (w) return w;
+    mu.ui.toast('MOO editor', 'The browser blocked the editor window. Allow pop-ups for μClient to open it in a window; showing it here for now.');
+  }
+  return showInModal(mu, session, load, giveUp);
+}
+
+const editorOpts = (mu: Mu, sid: string) => ({
+  lint: mu.settings.get<boolean>('lint', { sid }) !== false,
+  mode: String(mu.settings.get('mode', { sid }) ?? 'auto') as Mode | 'auto',
+});
+
+/**
+ * Copy this page's theme (the root's data-* attributes and style, which carry the tokens) and stylesheets into a
+ * pop-out, and keep them in step until it closes: the host's classes (`mu.ui.css`) and this extension's CSS reach it.
+ */
+function mirrorStyles(w: Window): () => void {
+  const copies = new Map<Element, Element>();
+  const sync = () => {
+    if (w.closed) return;
+    const src = document.documentElement, dst = w.document.documentElement;
+    for (const a of [...src.attributes]) if ((a.name.startsWith('data-') || a.name === 'style' || a.name === 'class') && dst.getAttribute(a.name) !== a.value) dst.setAttribute(a.name, a.value);
+    const now = new Set(document.head.querySelectorAll('style, link[rel="stylesheet"]'));
+    for (const [s, c] of [...copies]) if (!now.has(s)) { c.remove(); copies.delete(s); }
+    for (const s of now) {
+      let c = copies.get(s);
+      if (!c) { c = w.document.importNode(s, true); w.document.head.appendChild(c); copies.set(s, c); }
+      else if (s.tagName === 'STYLE' && c.textContent !== s.textContent) c.textContent = s.textContent;
+    }
+  };
+  const mo = new MutationObserver(sync);
+  mo.observe(document.head, { childList: true, subtree: true, characterData: true });
+  mo.observe(document.documentElement, { attributes: true });
+  sync();
+  return () => mo.disconnect();
+}
+
+let windows = 0;
+
+/** One editor in its own browser window, or null when the pop-up was blocked. */
+function showInWindow(mu: Mu, session: EditorSession, load: () => Promise<EditorModule>, giveUp: () => void): Dispose | null {
+  const w = window.open('', `mooedit-${++windows}`, 'popup,width=960,height=680');
+  if (!w) return null;
+  let hostClosed = false, gone = false;
+  let ed: Mounted | null = null;
+  const d = w.document;
+  d.open(); d.write('<!doctype html><html lang="en"><head><meta charset="UTF-8"></head><body></body></html>'); d.close();
+  d.title = session.title;
+  d.body.style.margin = '0';
+  d.body.style.background = 'var(--bg)';
+  const stopStyles = mirrorStyles(w);
+  const el = d.createElement('div');
+  el.className = 'mooed-win';
+  el.textContent = 'Loading the editor…';
+  d.body.append(el);
+
+  const teardown = () => {
+    if (gone) return;
+    gone = true;
+    window.removeEventListener('pagehide', closeWin);
+    stopStyles();
+    ed?.dispose(); ed = null;
+    if (!w.closed) w.close();
+  };
+  const closeWin = () => { hostClosed = true; teardown(); };
+  // The client page goes away: the editor window goes with it (the draft is kept by the host).
+  window.addEventListener('pagehide', closeWin);
+  // Closing the window is Cancel; unsaved edits get the browser's own "leave?" prompt first.
+  w.addEventListener('beforeunload', (e) => { if (!hostClosed && ed && !ed.requestClose()) { e.preventDefault(); e.returnValue = ''; } });
+  w.addEventListener('pagehide', () => { const cancel = !hostClosed; teardown(); if (cancel) session.cancel(); });
+  w.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!ed || ed.requestClose()) { teardown(); session.cancel(); }
+  });
+
+  load().then((m) => {
+    if (gone) return;
+    el.textContent = '';
+    ed = m.mountEditor(el, session, mu, editorOpts(mu, session.sid));
+    w.focus();
+  }, (e) => {
+    mu.log.error('the editor module did not load:', e);
+    mu.ui.toast('MOO editor', `The code editor could not load (${(e as Error)?.message ?? e}). Showing the plain editor.`, { kind: 'error' });
+    hostClosed = true;
+    teardown();
+    giveUp();
+  });
+  return closeWin;
+}
+
+/** One editor in a host modal. */
+function showInModal(mu: Mu, session: EditorSession, load: () => Promise<EditorModule>, giveUp: () => void): Dispose {
   let hostClosed = false;
   let ed: Mounted | null = null;
   const modal = mu.ui.modal({
@@ -95,10 +192,7 @@ function showIn(mu: Mu, session: EditorSession, load: () => Promise<EditorModule
       load().then((m) => {
         if (gone) return;
         el.textContent = '';
-        ed = m.mountEditor(el, session, mu, {
-          lint: mu.settings.get<boolean>('lint', { sid: session.sid }) !== false,
-          mode: String(mu.settings.get('mode', { sid: session.sid }) ?? 'auto') as Mode | 'auto',
-        });
+        ed = m.mountEditor(el, session, mu, editorOpts(mu, session.sid));
       }, (e) => {
         mu.log.error('the editor module did not load:', e);
         mu.ui.toast('MOO editor', `The code editor could not load (${(e as Error)?.message ?? e}). Showing the plain editor.`, { kind: 'error' });

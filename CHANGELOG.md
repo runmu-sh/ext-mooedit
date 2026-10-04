@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- New setting **Always open the editor in a new window** (Settings → Extensions → MOO editor; off by default, kept
+  on this device). The editor pops out into its own browser window with your theme. Program saves and closes it;
+  closing the window or Esc cancels (unsaved edits ask first). If the browser blocks the pop-up, the editor opens
+  as a dialog and a toast says why.
+
 ## 1.1.1
 
 - Ships the release build of `dist/`: 1.1.0 carried a dev build whose editor module did not match its pin.

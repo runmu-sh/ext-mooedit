@@ -54,6 +54,8 @@ const CSS = `
 .mooed .runs { display: inline-flex; align-items: baseline; gap: .8ch; min-width: 0; }
 .mooed .runs code { font-family: var(--font-mono); font-size: .72rem; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mooed .err { font-size: .72rem; color: var(--alert); min-width: 0; overflow-wrap: anywhere; }
+.mooed-win { height: 100vh; display: flex; flex-direction: column; }
+.mooed-win .mooed { flex: 1; height: auto; margin: 0; }
 @media (max-width: 520px) { .mooed { height: min(70vh, 36rem); } .mooed .sess { flex-basis: 100%; } .mooed .runs, .mooed .err { flex-basis: 100%; } .mooed .bar { gap: .1rem .3rem; } }
 `;
 
@@ -83,8 +85,11 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
     return [s.language === 'moo-code' ? moocode({ linting: opts.lint }) : [], lineNumbers(), highlightActiveLineGutter()];
   };
   const cmHost = h('div', { class: 'cm' });
+  const doc = el.ownerDocument;
   const ed = new EditorView({
     parent: cmHost,
+    // The editor may live in a pop-out window: CodeMirror's styles go to that document, not this one.
+    root: doc,
     state: EditorState.create({
       doc: s.draft,
       extensions: [
@@ -175,9 +180,9 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
     root.dataset.mode = mode;
     root.dataset.view = view;
     // Re-rendering replaces the buttons: keep focus inside the editor (Esc, Ctrl+S and Tab still work).
-    const lost = root.contains(document.activeElement) && !cmHost.contains(document.activeElement);
+    const lost = root.contains(doc.activeElement) && !cmHost.contains(doc.activeElement);
     renderBar(); renderNotes(); renderPane(); renderFoot();
-    if (lost && !root.contains(document.activeElement)) { if (view === 'edit') ed.focus(); else root.focus({ preventScroll: true }); }
+    if (lost && !root.contains(doc.activeElement)) { if (view === 'edit') ed.focus(); else root.focus({ preventScroll: true }); }
   }
 
   async function save(run = false) {
@@ -217,7 +222,7 @@ export function mountEditor(el: HTMLElement, s: EditorSession, mu: Mu, opts: Edi
   });
 
   render();
-  requestAnimationFrame(() => ed.focus());
+  (doc.defaultView ?? window).requestAnimationFrame(() => ed.focus());
 
   return {
     view: ed,
