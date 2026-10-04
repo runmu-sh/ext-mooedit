@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Ships the release build of `dist/`: 1.1.0 carried a dev build whose editor module did not match its pin.
+
 ## 1.1.0
 
 - **Program** sends straight away: the Review step, the Diff view and its confirm are gone. The button reads
